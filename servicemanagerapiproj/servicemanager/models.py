@@ -78,6 +78,7 @@ class Task(models.Model):
 class TaskIteration(models.Model):
     TaskID = models.IntegerField(null=True)
     GUID = models.UUIDField(primary_key=False)
+    Iteration = models.IntegerField(null=True)
     JSONData = models.JSONField(null=True)
     CreatedDate =  models.DateTimeField(null=True)
     CreatedBy = models.CharField(max_length=50, null=True)

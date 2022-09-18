@@ -43,6 +43,7 @@ def ProcessTask(instance):
                 taskIteration.GUID = instance.GUID
                 taskIteration.JSONData = jsonData
                 taskIteration.CreatedDate = datetime.now()
+                taskIteration.Iteration = i + 1
                 taskIteration.save()
                 
                 time.sleep(5)

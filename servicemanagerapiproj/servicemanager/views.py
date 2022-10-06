@@ -1,4 +1,6 @@
 from datetime import datetime
+import io
+import os
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import action
@@ -7,10 +9,11 @@ from rest_framework.response import Response
 from servicemanager.serializers import TaskSerializer, TaskIterationSerializer
 from servicemanager.models import Task, TaskIteration
 from rest_framework.response import Response
+from rest_framework.parsers import JSONParser
 from rest_framework.decorators import api_view
 import time
 from django.http import HttpResponse
-import json
+
 
 
 
@@ -22,6 +25,7 @@ def GetAllTasks(request):
 @api_view(['POST'])
 def PostTask(request):
     instance = Task.objects.get_queryset().filter(GUID=request.data['GUID']).first()
+    UpdateJsonConfig(instance)
     ProcessTask(instance=instance)
     return HttpResponse(status=status.HTTP_200_OK)
 
@@ -55,3 +59,12 @@ def ProcessTask(instance):
         if compSerializer.is_valid():
             compSerializer.save()
     return isValid
+
+def UpdateJsonConfig(instance):
+    dirPath = os.path.dirname(os.path.realpath(__file__))
+    filePath = os.path.join("servicemanagerapiproj", "eowyn_inputs","mlc_xmli_cli_config.json")
+    with open(filePath, 'r') as configFile:
+     stream = io.BytesIO(str.encode(configFile.read()))
+     configJson = JSONParser().parse(stream=stream)
+     configJson['Eowyn']['regression_name'] = instance.RegressionName
+     return configJson

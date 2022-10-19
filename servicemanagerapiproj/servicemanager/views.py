@@ -1,19 +1,20 @@
 from datetime import datetime
 import io
+from multiprocessing import Event
 import os
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
-from servicemanager.serializers import TaskSerializer, TaskIterationSerializer
-from servicemanager.models import Task, TaskIteration
+from servicemanager.serializers import TaskSerializer
+from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from rest_framework.decorators import api_view
 import time
+from django.core import serializers
 from django.http import HttpResponse
-
 
 
 
@@ -28,6 +29,57 @@ def PostTask(request):
     UpdateJsonConfig(instance)
     ProcessTask(instance=instance)
     return HttpResponse(status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def GetPlatformEvents(request, platformID):
+    platformEventData = EmonEvent.objects.filter(Platform__Name = platformID)
+    # assuming obj is a model instance
+    serialized_obj = serializers.serialize('json', platformEventData)
+    return HttpResponse(serialized_obj, content_type="application/json")
+
+@api_view(['GET'])
+def GetPlatformCounters(request, eventID):
+    list= eventID.split(",")
+    emonCounterData = EmonCounter.objects.filter(EmonEvent__EmonEventID__in = list)
+    # assuming obj is a model instance
+    serialized_obj = serializers.serialize('json', emonCounterData)
+    return HttpResponse(serialized_obj, content_type="application/json")
+
+@api_view(['GET'])
+def ProcessEventCounters(request):
+     dirPath = os.path.dirname(os.path.realpath(__file__))
+     filePath = os.path.join(dirPath, "data", "cpx.json")
+     #save platform to db
+     pltfrm = Platform()
+     Platform.objects.all().delete()
+     EmonEvent.objects.all().delete()
+     EmonCounter.objects.all().delete()
+     pltfrm.Name = "cpx"
+     pltfrm.PlatformID = 1
+     pltfrm.save()
+
+     with open(filePath, 'r') as eventcounterfile:
+        stream = io.BytesIO(str.encode(eventcounterfile.read()))
+        eventCounterData = JSONParser().parse(stream=stream)
+        i = 1
+        j = 1
+        for key, value in eventCounterData['evts_cts'].items():
+            #save event to DB
+            evt = EmonEvent()
+            evt.EmonEventID = i
+            evt.Name = key
+            evt.Platform = Platform.objects.get(PlatformID = 1)
+            evt.save()
+            #save counter to DB
+            for ctr in value:
+                counter = EmonCounter()
+                counter.Name = ctr
+                counter.EmonCounterID = j
+                counter.EmonEvent = EmonEvent.objects.get(EmonEventID = i)
+                counter.save()
+                j = j + 1
+            i = i + 1
+        return HttpResponse(eventCounterData, content_type="application/json")
 
 def ProcessTask(instance): 
     isValid = False
@@ -67,4 +119,8 @@ def UpdateJsonConfig(instance):
      stream = io.BytesIO(str.encode(configFile.read()))
      configJson = JSONParser().parse(stream=stream)
      configJson['Eowyn']['regression_name'] = instance.RegressionName
+     targetPath = os.path.join("servicemanagerapiproj", "eowyn_inputs","test.json")
+     file1 = open(targetPath, "w")
+     file1.write(str(configJson))
+     file1.close()
      return configJson

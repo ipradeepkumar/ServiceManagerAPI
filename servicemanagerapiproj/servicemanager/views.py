@@ -86,7 +86,11 @@ def ProcessTask(instance):
     for i in range(instance.TotalIterations):
             data = {
                 "CurrentIteration": str(i + 1),
-                "Status": 'IN-PROGRESS'
+                "Status": 'IN-PROGRESS',
+                "TestResults": '{Passed: 3,Failed: 2}',
+                "AxonLog": 'Logged data',
+                "IterationResult": 'Results',
+                "AzureLink": "http://www.google.com"
             }
             serializer = TaskSerializer(instance=instance, data=data)
             if serializer.is_valid():

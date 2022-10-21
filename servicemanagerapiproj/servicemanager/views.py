@@ -48,34 +48,31 @@ def GetPlatformCounters(request, eventID):
 @api_view(['GET'])
 def ProcessEventCounters(request):
      dirPath = os.path.dirname(os.path.realpath(__file__))
-     filePath = os.path.join(dirPath, "data", "cpx.json")
+     filePath = os.path.join(dirPath, "data", "ipx.json")
      #save platform to db
      pltfrm = Platform()
-     Platform.objects.all().delete()
-     EmonEvent.objects.all().delete()
-     EmonCounter.objects.all().delete()
-     pltfrm.Name = "cpx"
-     pltfrm.PlatformID = 1
+     pltfrm.Name = "ipx"
+     pltfrm.PlatformID = Platform.objects.count() + 1
      pltfrm.save()
 
      with open(filePath, 'r') as eventcounterfile:
         stream = io.BytesIO(str.encode(eventcounterfile.read()))
         eventCounterData = JSONParser().parse(stream=stream)
-        i = 1
-        j = 1
+        i = EmonEvent.objects.count() + 1
+        j = EmonCounter.objects.count() + 1
         for key, value in eventCounterData['evts_cts'].items():
             #save event to DB
             evt = EmonEvent()
             evt.EmonEventID = i
             evt.Name = key
-            evt.Platform = Platform.objects.get(PlatformID = 1)
+            evt.Platform = Platform.objects.get(PlatformID = Platform.objects.last().PlatformID)
             evt.save()
             #save counter to DB
             for ctr in value:
                 counter = EmonCounter()
                 counter.Name = ctr
                 counter.EmonCounterID = j
-                counter.EmonEvent = EmonEvent.objects.get(EmonEventID = i)
+                counter.EmonEvent = EmonEvent.objects.get(EmonEventID = EmonEvent.objects.last().EmonEventID)
                 counter.save()
                 j = j + 1
             i = i + 1

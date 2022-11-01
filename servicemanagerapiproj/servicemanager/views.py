@@ -1,14 +1,16 @@
 from datetime import datetime
 import io
-from multiprocessing import Event
+from multiprocessing import Process
+import multiprocessing
 import os
+import threading
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
 from servicemanager.serializers import TaskSerializer
-from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform
+from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform, TaskExecutionLog
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from rest_framework.decorators import api_view
@@ -25,9 +27,13 @@ def GetAllTasks(request):
 
 @api_view(['POST'])
 def PostTask(request):
+    time.sleep(20)
     instance = Task.objects.get_queryset().filter(GUID=request.data['GUID']).first()
     UpdateJsonConfig(instance)
-    ProcessTask(instance=instance)
+
+    process = threading.Thread(target=ProcessTask, args=(request, instance))
+    process.start()
+   
     return HttpResponse(status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -78,39 +84,59 @@ def ProcessEventCounters(request):
             i = i + 1
         return HttpResponse(eventCounterData, content_type="application/json")
 
-def ProcessTask(instance): 
+def ProcessTask(req, instance): 
     isValid = False
+    ClearPreviousRunData(instance)
     for i in range(instance.TotalIterations):
-            data = {
-                "CurrentIteration": str(i + 1),
-                "Status": 'IN-PROGRESS',
-                "TestResults": '{Passed: 3,Failed: 2}',
-                "AxonLog": 'Logged data',
-                "IterationResult": 'Results',
-                "AzureLink": "http://www.google.com"
-            }
-            serializer = TaskSerializer(instance=instance, data=data)
-            if serializer.is_valid():
-                isValid = True
-                serializer.save()
+            userExecution = Task.objects.get(GUID = instance.GUID).IsUserExecution
+            if (userExecution):
+                data = {
+                    "CurrentIteration": str(i + 1),
+                    "Status": 'IN-PROGRESS',
+                    "TestResults": '{Passed: 3,Failed: 2}',
+                    "AxonLog": 'Logged data',
+                    "IterationResult": 'Results',
+                    "AzureLink": "http://www.google.com"
+                }
+                serializer = TaskSerializer(instance=instance, data=data)
+                if serializer.is_valid():
+                    isValid = True
+                    serializer.save()
 
-                taskIteration = TaskIteration()
-                jsonData = { 'key1': (i + 1), 'key2': 'value2', 'key3': 'value3', 'key4': 'value4' }
-                taskIteration.TaskID = instance.id
-                taskIteration.GUID = instance.GUID
-                taskIteration.JSONData = jsonData
-                taskIteration.CreatedDate = datetime.now()
-                taskIteration.Iteration = i + 1
-                taskIteration.save()
-                
-                time.sleep(5)
-    if (i == instance.TotalIterations - 1):
-        compData = {
-            "Status": 'COMPLETED'
-        }
-        compSerializer = TaskSerializer(instance=instance, data=compData)
-        if compSerializer.is_valid():
-            compSerializer.save()
+                    taskIteration = TaskIteration()
+                    jsonData = { 'key1': (i + 1), 'key2': 'value2', 'key3': 'value3', 'key4': 'value4' }
+                    taskIteration.TaskID = instance.id
+                    taskIteration.GUID = instance.GUID
+                    taskIteration.JSONData = jsonData
+                    taskIteration.CreatedDate = datetime.now()
+                    taskIteration.Iteration = i + 1
+                    taskIteration.save()
+                    
+                    time.sleep(10)
+                if (i == instance.TotalIterations - 1):
+                    compData = {
+                        "Status": 'COMPLETED'
+                    }
+                    compSerializer = TaskSerializer(instance=instance, data=compData)
+                    if compSerializer.is_valid():
+                        compSerializer.save()
+            else:
+                if (i == instance.TotalIterations - 1):
+                    SaveTaskExecutionLog(req, instance, 'COMPLETED')
+                    task = Task.objects.get(GUID = instance.GUID)
+                    task.IsEowynExecution = True
+                    task.IsUserExecution = True
+                    task.CurrentIteration = instance.TotalIterations
+                    task.Status = 'COMPLETED'
+                    task.save()
+                else:
+                    SaveTaskExecutionLog(req, instance, 'STOPPED')
+                    task = Task.objects.get(GUID = instance.GUID)
+                    task.IsEowynExecution = False
+                    task.Status = 'STOPPED'
+                    task.save()
+                isValid = False
+                break
     return isValid
 
 def UpdateJsonConfig(instance):
@@ -125,3 +151,27 @@ def UpdateJsonConfig(instance):
      file1.write(str(configJson))
      file1.close()
      return configJson
+
+def ClearPreviousRunData(instance):
+        data = {
+            "CurrentIteration": 0,
+            "Status": 'IN-PROGRESS',
+            "TestResults": '',
+            "AxonLog": '',
+            "IterationResult": '',
+            "AzureLink": ""
+        }
+        serializer = TaskSerializer(instance=instance, data=data)
+        if serializer.is_valid():
+                serializer.save()
+        TaskIteration.objects.filter(GUID=instance.GUID).delete()
+
+def SaveTaskExecutionLog(req, instance, status):
+        executionLog = TaskExecutionLog(
+        TaskID = instance.TaskID,
+        GUID = instance.GUID,
+        StatusDate = datetime.utcnow(),
+        Status = status,
+        CreatedBy = req.user.username,
+        CreatedDate = datetime.utcnow()) 
+        executionLog.save()

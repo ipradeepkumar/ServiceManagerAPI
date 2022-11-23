@@ -10,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
 from servicemanager.serializers import TaskSerializer
-from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform, TaskExecutionLog
+from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform, TaskExecutionLog, Station
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from rest_framework.decorators import api_view
@@ -89,54 +89,60 @@ def ProcessTask(req, instance):
     ClearPreviousRunData(instance)
     for i in range(instance.TotalIterations):
             userExecution = Task.objects.get(GUID = instance.GUID).IsUserExecution
-            if (userExecution):
-                data = {
-                    "CurrentIteration": str(i + 1),
-                    "Status": 'IN-PROGRESS',
-                    "TestResults": '{Passed: 3,Failed: 2}',
-                    "AxonLog": 'Logged data',
-                    "IterationResult": 'Results',
-                    "AzureLink": "http://www.google.com"
-                }
-                serializer = TaskSerializer(instance=instance, data=data)
-                if serializer.is_valid():
-                    isValid = True
-                    serializer.save()
-
-                    taskIteration = TaskIteration()
-                    jsonData = { 'key1': (i + 1), 'key2': 'value2', 'key3': 'value3', 'key4': 'value4' }
-                    taskIteration.TaskID = instance.id
-                    taskIteration.GUID = instance.GUID
-                    taskIteration.JSONData = jsonData
-                    taskIteration.CreatedDate = datetime.now()
-                    taskIteration.Iteration = i + 1
-                    taskIteration.save()
-                    
-                    time.sleep(10)
-                if (i == instance.TotalIterations - 1):
-                    compData = {
-                        "Status": 'COMPLETED'
-                    }
-                    compSerializer = TaskSerializer(instance=instance, data=compData)
-                    if compSerializer.is_valid():
-                        compSerializer.save()
-            else:
-                if (i == instance.TotalIterations - 1):
-                    SaveTaskExecutionLog(req, instance, 'COMPLETED')
-                    task = Task.objects.get(GUID = instance.GUID)
-                    task.IsEowynExecution = True
-                    task.IsUserExecution = True
-                    task.CurrentIteration = instance.TotalIterations
-                    task.Status = 'COMPLETED'
-                    task.save()
-                else:
-                    SaveTaskExecutionLog(req, instance, 'STOPPED')
-                    task = Task.objects.get(GUID = instance.GUID)
-                    task.IsEowynExecution = False
-                    task.Status = 'STOPPED'
-                    task.save()
-                isValid = False
+            if (userExecution == False):
                 break
+            data = {
+                "CurrentIteration": str(i + 1),
+                "Status": 'IN-PROGRESS',
+                "TestResults": '{Passed: 3,Failed: 2}',
+                "AxonLog": 'Logged data',
+                "IterationResult": 'Results',
+                "AzureLink": "http://www.google.com"
+            }
+            serializer = TaskSerializer(instance=instance, data=data)
+            if serializer.is_valid():
+                isValid = True
+                serializer.save()
+
+                taskIteration = TaskIteration()
+                jsonData = { 'key1': (i + 1), 'key2': 'value2', 'key3': 'value3', 'key4': 'value4' }
+                taskIteration.TaskID = instance.id
+                taskIteration.GUID = instance.GUID
+                taskIteration.JSONData = jsonData
+                taskIteration.CreatedDate = datetime.now()
+                taskIteration.Iteration = i + 1
+                taskIteration.save()
+                
+                time.sleep(10)
+                userExecution = Task.objects.get(GUID = instance.GUID).IsUserExecution
+                if (userExecution == False):
+                    break
+            if (i == instance.TotalIterations - 1):
+                compData = {
+                    "Status": 'COMPLETED'
+                }
+                compSerializer = TaskSerializer(instance=instance, data=compData)
+                if compSerializer.is_valid():
+                    compSerializer.save()
+            
+    if (i == instance.TotalIterations - 1):
+        SaveTaskExecutionLog(req, instance, 'COMPLETED')
+        task = Task.objects.get(GUID = instance.GUID)
+        task.IsEowynExecution = True
+        task.IsUserExecution = True
+        task.CurrentIteration = instance.TotalIterations
+        task.Status = 'COMPLETED'
+        task.save()
+        MakeStationActive(instance=instance)
+    else:
+        SaveTaskExecutionLog(req, instance, 'STOPPED')
+        task = Task.objects.get(GUID = instance.GUID)
+        task.IsEowynExecution = False
+        task.Status = 'STOPPED'
+        task.save()
+        MakeStationActive(instance=instance)
+       
+            
     return isValid
 
 def UpdateJsonConfig(instance):
@@ -175,3 +181,8 @@ def SaveTaskExecutionLog(req, instance, status):
         CreatedBy = req.user.username,
         CreatedDate = datetime.utcnow()) 
         executionLog.save()
+
+def MakeStationActive(instance):
+    station = Station.objects.get(Name=instance.Station)
+    station.IsActive = True
+    station.save()

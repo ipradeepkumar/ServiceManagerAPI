@@ -10,6 +10,8 @@ class Station(models.Model):
     StationID = models.IntegerField()
     Name = models.CharField(max_length=250)
     Desc = models.CharField(max_length=500)
+    IsActive = models.BooleanField(null=True)
+    CreatedBy = models.CharField(max_length=50, null=True)
 
 class Tool(models.Model):
     ToolID = models.IntegerField(primary_key=True, unique=False)

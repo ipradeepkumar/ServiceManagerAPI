@@ -16,6 +16,8 @@ class Station(models.Model):
 class Tool(models.Model):
     ToolID = models.IntegerField(primary_key=True, unique=False)
     Name = models.CharField(max_length=150)
+    StationID = models.IntegerField()
+    ToolJson = models.CharField(max_length=100)
 
 class ToolEvent(models.Model):
     ToolEventID = models.IntegerField(primary_key=True, unique=False)
@@ -34,7 +36,7 @@ class Platform(models.Model):
 class EmonEvent(models.Model):
     EmonEventID = models.IntegerField()
     Name = models.CharField(max_length=150)
-    Platform = models.ForeignKey(Platform, on_delete=models.SET_NULL, null=True, related_name="emonevents")
+    Station = models.ForeignKey(Station, on_delete=models.SET_NULL, null=True, related_name="emonevents")
 
 class EmonCounter(models.Model):
     EmonCounterID = models.IntegerField()
@@ -82,6 +84,7 @@ class Task(models.Model):
     AzureLink = models.CharField(max_length=250, null=True)
     IsUserExecution = models.BooleanField(null=True)
     IsEowynExecution = models.BooleanField(null=True)
+    ToolJson = models.TextField(null=True)
 
 class TaskIteration(models.Model):
     TaskID = models.IntegerField(null=True)

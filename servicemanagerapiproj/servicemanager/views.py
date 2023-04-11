@@ -1,5 +1,6 @@
 from datetime import datetime
 import io
+import json
 from multiprocessing import Process
 import multiprocessing
 import os
@@ -10,14 +11,14 @@ from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
 from servicemanager.serializers import TaskSerializer
-from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform, TaskExecutionLog, Station
+from servicemanager.models import Task, TaskIteration, EmonCounter, EmonEvent, Platform, TaskExecutionLog, Station, Tool
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from rest_framework.decorators import api_view
 import time
 from django.core import serializers
 from django.http import HttpResponse
-
+import uuid
 
 
 @api_view(['GET'])
@@ -27,11 +28,16 @@ def GetAllTasks(request):
 
 @api_view(['POST'])
 def PostTask(request):
-    time.sleep(20)
-    instance = Task.objects.get_queryset().filter(GUID=request.data['GUID']).first()
-    UpdateJsonConfig(instance)
+    taskJson = request.POST['taskJSON']
+    jsonStr = taskJson.replace("\r\n\t","").replace("\r\n","")
+    dict = json.loads(jsonStr)
+    task = Task.objects.create(**dict)
+    task.save()
+    
+    #instance = Task.objects.get_queryset().filter(GUID=request.data['taskJSON']).first()
+    #UpdateJsonConfig(instance)
 
-    process = threading.Thread(target=ProcessTask, args=(request, instance))
+    process = threading.Thread(target=ProcessTask, args=(request, task))
     process.start()
    
     return HttpResponse(status=status.HTTP_200_OK)
@@ -56,10 +62,17 @@ def ProcessEventCounters(request):
      dirPath = os.path.dirname(os.path.realpath(__file__))
      filePath = os.path.join(dirPath, "data", "ipx.json")
      #save platform to db
-     pltfrm = Platform()
-     pltfrm.Name = "ipx"
-     pltfrm.PlatformID = Platform.objects.count() + 1
-     pltfrm.save()
+    #  pltfrm = Platform()
+    #  pltfrm.Name = "ipx"
+    #  pltfrm.PlatformID = Platform.objects.count() + 1
+    #  pltfrm.save()
+
+     st = Station.objects.filter(id = 4).first()
+    #  st.Name = "Station 2"
+    #  st.Desc = "icx"
+    #  st.StationID = Station.objects.count() + 1
+    #  st.IsActive  = True
+    #  st.save()
 
      with open(filePath, 'r') as eventcounterfile:
         stream = io.BytesIO(str.encode(eventcounterfile.read()))
@@ -71,7 +84,7 @@ def ProcessEventCounters(request):
             evt = EmonEvent()
             evt.EmonEventID = i
             evt.Name = key
-            evt.Platform = Platform.objects.get(PlatformID = Platform.objects.last().PlatformID)
+            evt.Station = st#Station.objects.get(id = Platform.objects.last().id)
             evt.save()
             #save counter to DB
             for ctr in value:
@@ -83,6 +96,13 @@ def ProcessEventCounters(request):
                 j = j + 1
             i = i + 1
         return HttpResponse(eventCounterData, content_type="application/json")
+
+@api_view(['GET'])
+def GetToolNames(request, stationId):
+    toolData = Tool.objects.filter(Tool__StationID = stationId)
+    # assuming obj is a model instance
+    serialized_obj = serializers.serialize('json', toolData)
+    return HttpResponse(serialized_obj, content_type="application/json")
 
 def ProcessTask(req, instance): 
     isValid = False

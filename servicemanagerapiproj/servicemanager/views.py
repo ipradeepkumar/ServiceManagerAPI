@@ -28,16 +28,16 @@ def GetAllTasks(request):
 
 @api_view(['POST'])
 def PostTask(request):
-    taskJson = request.POST['taskJSON']
-    jsonStr = taskJson.replace("\r\n\t","").replace("\r\n","")
-    dict = json.loads(jsonStr)
-    task = Task.objects.create(**dict)
-    task.save()
+    # taskJson = request.POST['taskJSON']
+    # jsonStr = taskJson.replace("\r\n\t","").replace("\r\n","")
+    # dict = json.loads(jsonStr)
+    # task = Task.objects.create(**dict)
+    # task.save()
     
-    #instance = Task.objects.get_queryset().filter(GUID=request.data['taskJSON']).first()
+    instance = Task.objects.get_queryset().filter(GUID=request.data['GUID']).first()
     #UpdateJsonConfig(instance)
 
-    process = threading.Thread(target=ProcessTask, args=(request, task))
+    process = threading.Thread(target=ProcessTask, args=(request, instance))
     process.start()
    
     return HttpResponse(status=status.HTTP_200_OK)
@@ -60,7 +60,7 @@ def GetPlatformCounters(request, eventID):
 @api_view(['GET'])
 def ProcessEventCounters(request):
      dirPath = os.path.dirname(os.path.realpath(__file__))
-     filePath = os.path.join(dirPath, "data", "ipx.json")
+     filePath = os.path.join(dirPath, "data", "spr.json")
      #save platform to db
     #  pltfrm = Platform()
     #  pltfrm.Name = "ipx"
@@ -107,6 +107,7 @@ def GetToolNames(request, stationId):
 def ProcessTask(req, instance): 
     isValid = False
     ClearPreviousRunData(instance)
+    
     for i in range(instance.TotalIterations):
             userExecution = Task.objects.get(GUID = instance.GUID).IsUserExecution
             if (userExecution == False):
@@ -114,7 +115,7 @@ def ProcessTask(req, instance):
             data = {
                 "CurrentIteration": str(i + 1),
                 "Status": 'IN-PROGRESS',
-                "TestResults": '{Passed: 3,Failed: 2}',
+                "TestResults": json.dumps("{'sigTerm':2,'passed':1,'failed': 3}"),
                 "AxonLog": 'Logged data',
                 "IterationResult": 'Results',
                 "AzureLink": "http://www.google.com"
